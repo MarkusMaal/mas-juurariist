@@ -23,6 +23,10 @@ public partial class App : Application
         {
             File.WriteAllBytes(Path.GetTempPath() + "cpuid", Properties.Resources.cpuid_darwin);
         }
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(Path.GetTempPath() + "cpuid", UnixFileMode.UserExecute | UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
         AvaloniaXamlLoader.Load(this);
     }
 
