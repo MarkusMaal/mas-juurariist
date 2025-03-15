@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using HardwareInformation;
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Management;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -9,6 +10,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using Avalonia.Threading;
 
 namespace Markuse_asjade_juurutamise_tööriist;
 
@@ -17,8 +20,9 @@ public partial class MainWindow : Window
     string CPU_ID = "";
     string Mobo_ID = "";
     string mas_root = "";
-    MachineInformation hwinfo = MachineInformationGatherer.GatherInformation(true);
     App? app = ((App?)App.Current);
+    private bool unsupported = false;
+    Edition edition;
     public MainWindow()
     {
         InitializeComponent();
@@ -39,12 +43,65 @@ public partial class MainWindow : Window
                 break;
             }
         }
-        StatusLabelCpuId.Content = $"Protsessori ID: " + app.GetCpuId();
-        StatusLabelBiosId.Content = $"SMBIOS ID: {hwinfo.SmBios.BIOSVersion}";
-        StatusLabelMoboId.Content = $"Emaplaadi ID: {Mobo_ID}";
-        Verifile1Hash.Content = "Verifile 1.0 räsi: " + q() + "\nVerifile 1.0 olek: " + (Verifile() ? "OK" : "vajab juurutamist");
-        Verifile2State.Content = "Verifile 2.0 räsi: " + CalculateSHA256(mas_root + "/verifile2.dat") + "\nVerifile 2.0 olek: BYPASS";
 
+        edition = new Edition(mas_root + "/edition.txt")
+        {
+            MasRoot = mas_root
+        };
+        string cpuid = app.GetCpuId();
+        string bios = hwinfo.SmBios.BIOSVersion;
+        string verificate = q();
+        string verificate2 = CalculateSHA256(mas_root + "/verifile2.dat");
+        bool vf1 = Verifile();
+        string vf2 = Verifile2();
+        Dispatcher.UIThread.Post(() =>
+        {
+            StatusLabelCpuId.Content = $"Protsessori ID: " + cpuid;
+            StatusLabelBiosId.Text = $"SMBIOS ID: {bios}";
+            StatusLabelMoboId.Content = $"Emaplaadi ID: {Mobo_ID}";
+            Verifile1Hash.Text = "Verifile 1.0 räsi: " + verificate + "\nVerifile 1.0 olek: " +
+                                 (vf1 ? "OK" : "Vajab juurutamist");
+            Verifile2State.Text = "Verifile 2.0 räsi: " + verificate2 + "\nVerifile 2.0 olek: " + vf2;
+            StatusProgress.IsIndeterminate = false;
+            StatusLabel.Content = "Valmis";
+            MainTabs.IsEnabled = true;
+            if (vf1 && (vf2 == "VERIFIED"))
+            {
+                AppendLog("Markuse asjad on selles seadmes õigesti juurutatud");
+            }
+            else switch (vf2)
+            {
+                case "FAILED":
+                    AppendLog("Püsivuskontrolli käivitamine nurjus. Olge kindlad, et teie arvutisse oleks paigaldatud Java 21 või hilisem versioon.");
+                    break;
+                case "TAMPERED":
+                    AppendLog("Räsi ei vasta riistvara ja väljaande konfiguratsioonile. Protsessori ja/või emaplaadi väljavahetamisel tuleb Markuse asjad uuesti juurutada. Juhul kui muutsite käsitsi edition.txt sisu, võtke kõik enda muudatused tagasi.");
+                    break;
+                default:
+                {
+                    switch (vf1)
+                    {
+                        case false when (vf2 == "FOREIGN"):
+                            AppendLog("Selles arvutis ei ole Markuse asjad süsteemi tarkvara");
+                            break;
+                        case true when (vf2 == "LEGACY"):
+                            AppendLog("Selles arvutis on pärandversioon Markuse asjadest. Soovitav on seade juurutada Verifile 2.0 räsiga.");
+                            break;
+                        case false:
+                            AppendLog("Soovitatav on lisada sobiv Verifile 1.0 räsi, et vanemad Markuse asjade programmid toimiksid õigesti.");
+                            break;
+                    }
+
+                    break;
+                }
+            }
+        });
+
+    }
+
+    public void AppendLog(string log)
+    {
+        LogOutput.Text += log + "\n";
     }
     static string CalculateSHA256(string filename)
     {
@@ -59,89 +116,12 @@ public partial class MainWindow : Window
     }
     private void Window_Loaded(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        UpdateStatusLabelText();
-        for (int i = 0; i < 10; i++)
-        {
-            LogOutput.Text += "\nTest";
-        }
-    }
-    public bool Verifile()
-    {
-        string verificatable = q();
-        string[] savedstr = File.ReadAllText(mas_root + "/edition.txt", Encoding.GetEncoding(1252)).ToString().Split('\n');
-        string sttr = savedstr[savedstr.Length - 1];
-        if (verificatable == sttr)
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        var ts = new ThreadStart(UpdateStatusLabelText);
+        var t = new Thread(ts);
+        t.Start();
+        AppendLog("------------------------------------------");
+        AppendLog("Markuse asjade juurutamise tööriist");
+        AppendLog("------------------------------------------");
     }
 
-    public string q()
-    {
-        string CPIProcessorID = "CPI0" + ProcessorID().Substring(1);
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        string SHA1HashOfTrimmedEditionInfo = SHA1Hash(RemoveLinesFromBottomUntilPINAddNewLine(File.ReadAllText(mas_root + "/edition.txt", Encoding.GetEncoding(1252))));
-
-        return (MD5Hash(SHA1HashOfTrimmedEditionInfo + SHA1Hash(CPIProcessorID.Substring(1, CPIProcessorID.Length - 2)
-            + CPIProcessorID.Substring(0, 1)
-            + CPIProcessorID.Substring(CPIProcessorID.Length - 1, 1))).ToLower() + SHA1Hash(BIOS()).ToLower() + SHA1Hash(BaseboardProduct)).ToLower();
-    }
-
-    static string RemoveLinesFromBottomUntilPINAddNewLine(string s)
-    {
-        string[] sar = s.Split('\n');
-        string ns = "";
-        for (int i = 0; i < sar.Length - 3; i++)
-        {
-            ns += sar[i].ToString() + "\n";
-        }
-        return ns;
-    }
-    private string BIOS()
-    {
-        return hwinfo.SmBios.BIOSVersion.ToString() + "\r";
-    }
-
-    public string ProcessorID()
-    {
-        if (app == null) return "";
-        return app.GetCpuId();
-    }
-    public static string SHA1Hash(string z)
-    {
-        SHA1 cx = SHA1.Create();
-        byte[] xx = Encoding.ASCII.GetBytes(z);
-        byte[] hash = cx.ComputeHash(xx);
-
-        StringBuilder t = new StringBuilder();
-        for (int i = 0; i < hash.Length; i++)
-        {
-            t.Append(hash[i].ToString("X2"));
-        }
-        return t.ToString();
-    }
-    public static string MD5Hash(string z)
-    {
-        MD5 cx = MD5.Create();
-        byte[] xx = Encoding.ASCII.GetBytes(z);
-        byte[] hash = cx.ComputeHash(xx);
-
-        StringBuilder t = new StringBuilder();
-        for (int i = 0; i < hash.Length; i++)
-        {
-            t.Append(hash[i].ToString("X2"));
-        }
-        return t.ToString();
-    }
-
-    public string BaseboardProduct {
-        get
-        {
-            return "";
-        }
-    }
 }
