@@ -14,10 +14,10 @@
       <TabItem Header="Süsteemi olek">
         <StackPanel Margin="0,10">
           <Label Name="StatusLabelCpuId">Protsessori ID: </Label>
-          <Label>Emaplaadi ID: </Label>
-          <Label>BIOS ID: </Label>
-          <Label>Verifile 1.0 räsi: </Label>
-          <Label>Verifile 2.0 olek: </Label>
+          <Label Name="StatusLabelMoboId">Emaplaadi ID: </Label>
+          <Label Name="StatusLabelBiosId">BIOS ID: </Label>
+          <Label Name="Verifile1Hash">Verifile 1.0 räsi: </Label>
+          <Label Name="Verifile2State">Verifile 2.0 olek: </Label>
         </StackPanel>
       </TabItem>
       <TabItem Header="Juurutamine">
