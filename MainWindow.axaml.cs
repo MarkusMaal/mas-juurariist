@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.IO;
 using System.Threading;
@@ -58,9 +59,7 @@ public partial class MainWindow : Window
             Verifile1Hash.Text = "Verifile 1.0 räsi: " + verificate + "\nVerifile 1.0 olek: " +
                                  (vf1 ? "OK" : !_edition.Unsupported ? "Vajab juurutamist" : "N/A");
             Verifile2State.Text = "Verifile 2.0 räsi: " + verificate2 + "\nVerifile 2.0 olek: " + vf2;
-            StatusProgress.IsIndeterminate = false;
-            StatusLabel.Content = "Valmis";
-            MainTabs.IsEnabled = true;
+            Unlock();
             ClearLog();
             if (vf1 && (vf2 == "VERIFIED"))
             {
@@ -184,5 +183,266 @@ public partial class MainWindow : Window
     private async void CopyLogButton_OnClick(object? sender, RoutedEventArgs e)
     {
         await Clipboard!.SetTextAsync(LogOutput.Text);
+    }
+    
+    private void Relock(string msg)
+    {
+        StatusProgress.IsIndeterminate = true;
+        StatusLabel.Content = msg;
+        MainTabs.IsEnabled = false;
+    }
+
+    private void Unlock()
+    {
+        StatusProgress.IsIndeterminate = false;
+        StatusLabel.Content = "Valmis";
+        MainTabs.IsEnabled = true;
+    }
+
+    private void RunAdbDevices()
+    {
+        var p = new Process()
+        {
+            StartInfo =
+            {
+                FileName = "adb",
+                Arguments = "devices",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+            }
+        };
+        p.Start();
+        while (!p.StandardOutput.EndOfStream)
+        {
+            var line = p.StandardOutput.ReadLine();
+            Dispatcher.UIThread.Post(() => AppendLog(line!));
+        }
+        Dispatcher.UIThread.Post(Unlock);
+    }
+
+    private string RunAdbShellCmd(string cmd)
+    {
+        Dispatcher.UIThread.Post(() => AppendLog("-> adb shell \"" + cmd.Replace("\"", "\\\"") + "\""));
+        var p = new Process()
+        {
+            StartInfo =
+            {
+                FileName = "adb",
+                Arguments = "shell \"" + cmd.Replace("\"", "\\\"") + "\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+            }
+        };
+        p.Start();
+        string _out = "";
+        while (!p.StandardOutput.EndOfStream)
+        {
+            var line = p.StandardOutput.ReadLine();
+            _out += line + "\n";
+            Dispatcher.UIThread.Post(() => AppendLog(line!));
+        }
+
+        return _out;
+    }
+
+    private void AdbWaitForDevice()
+    {
+        Dispatcher.UIThread.Post(() => AppendLog("-> adb wait-for-device"));
+        var p = new Process()
+        {
+            StartInfo =
+            {
+                FileName = "adb",
+                Arguments = "wait-for-device",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+            }
+        };
+        p.Start();
+        while (!p.StandardOutput.EndOfStream)
+        {
+            var line = p.StandardOutput.ReadLine();
+            Dispatcher.UIThread.Post(() => AppendLog(line!));
+        }
+    }
+
+    private void AdbPush(string source, string destination)
+    {
+        Dispatcher.UIThread.Post(() => AppendLog("-> adb push \"" + source + "\" " + "\"" + destination + "\""));
+        var p = new Process()
+        {
+            StartInfo =
+            {
+                FileName = "adb",
+                Arguments = "push \"" + source + "\" " + "\"" + destination + "\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            }
+        };
+        p.Start();
+        while (!p.StandardOutput.EndOfStream)
+        {
+            var line = p.StandardOutput.ReadLine();
+            Dispatcher.UIThread.Post(() => AppendLog(line!));
+        }
+    }
+
+    private void RunWallpaperUpdate()
+    {
+        AdbWaitForDevice();
+        string devType = "unknown";
+        string characteristics = RunAdbShellCmd("getprop ro.build.characteristics").TrimEnd();
+        if (characteristics.Contains("tablet"))
+        {
+            devType = "tablet";
+        } else if (characteristics.Contains("phone"))
+        {
+            devType = "mobile";
+        }
+        else
+        {
+            string[] size = RunAdbShellCmd("wm size").TrimEnd().Split(": ")[1].Split("x");
+            var density = int.Parse(RunAdbShellCmd("wm density").TrimEnd().Split(": ")[1]);
+            double diag_pixels = Math.Sqrt(Math.Pow((double)int.Parse(size[0]), 2) * Math.Pow((double)int.Parse(size[1]), 2));
+            double diag_inches = diag_pixels / density;
+            if (diag_inches / 1000 > 7.0)
+            {
+                devType = "tablet";
+            }
+            else
+            {
+                devType = "mobile";
+            }
+        }
+
+        if (File.Exists(_masRoot + $"/bg_{devType}.png") && File.Exists(_masRoot + $"/bg_{devType}_lock.png"))
+        {
+            AdbPush(_masRoot + $"/bg_{devType}.png", $"/sdcard/Pictures/bg_{devType}.png");
+            AdbPush(_masRoot + $"/bg_{devType}_lock.png", $"/sdcard/Pictures/bg_{devType}_lock.png");
+            _ = RunAdbShellCmd($"su -c cp /sdcard/Pictures/bg_{devType}.png /data/system/users/0/wallpaper");
+            _ = RunAdbShellCmd($"su -c cp /sdcard/Pictures/bg_{devType}.png /data/system/users/0/wallpaper_orig");
+            _ = RunAdbShellCmd($"su -c cp /sdcard/Pictures/bg_{devType}_lock.png /data/system/users/0/wallpaper_lock");
+            _ = RunAdbShellCmd(
+                $"su -c cp /sdcard/Pictures/bg_{devType}_lock.png /data/system/users/0/wallpaper_lock_orig");
+            _ = RunAdbShellCmd("su -c killall com.android.systemui");
+        }
+
+        Dispatcher.UIThread.Post(Unlock);
+    }
+
+    private void RunReboot(string type)
+    {
+        AdbWaitForDevice();
+        _ = RunAdbShellCmd("reboot " + type);
+        Dispatcher.UIThread.Post(Unlock);
+    }
+    private void AdbDevices_OnClick(object? sender, RoutedEventArgs e)
+    {
+        ClearLog();
+        AppendLog("-> adb devices\n");
+        Relock("Seadmete tuvastamine...");
+        var ts = new ThreadStart(RunAdbDevices);
+        var t = new Thread(ts);
+        t.Start();
+    }
+
+    private void AdbWallpaperUpdate_OnClick(object? sender, RoutedEventArgs e)
+    {
+        ClearLog();
+        Relock("Taustapildi uuendamine...");
+        var ts = new ThreadStart(RunWallpaperUpdate);
+        var t = new Thread(ts);
+        t.Start();
+    }
+
+    private void AdbRebootFastboot_OnClick(object? sender, RoutedEventArgs e)
+    {
+        ClearLog();
+        Relock("Alglaadurisse käivitamine...");
+        var t = new Thread(() => RunReboot("bootloader"));
+        t.Start();
+    }
+
+    private void AdbRebootSystem_OnClick(object? sender, RoutedEventArgs e)
+    {
+        ClearLog();
+        Relock("Süsteemi taaskäivitamine...");
+        var t = new Thread(() => RunReboot("system"));
+        t.Start();
+    }
+
+    private void AdbRebootRecovery_OnClick(object? sender, RoutedEventArgs e)
+    {
+        ClearLog();
+        Relock("Taastekeskkonna käivitamine...");
+        var t = new Thread(() => RunReboot("recovery"));
+        t.Start();
+    }
+
+    private void RebootSystemUI()
+    {
+        AdbWaitForDevice();
+        RunAdbShellCmd("su -c killall com.android.systemui");
+        Dispatcher.UIThread.Post(Unlock);
+    }
+
+    private void AdbSystemUiReboot_OnClick(object? sender, RoutedEventArgs e)
+    {
+        ClearLog();
+        Relock("Süsteemi UI taaskäivitamine...");
+        var t = new Thread(RebootSystemUI);
+        t.Start();
+    }
+
+    private void DeployTestsButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        ClearLog();
+        Relock("Juurutuseelsete testide läbimine...");
+        new Thread(() =>
+        {
+            string testLog = _edition!.PerformTests();
+            Dispatcher.UIThread.Post(() => {
+                AppendLog(testLog);
+                Unlock();
+                if (LogOutput.Text!.Contains("FAIL")) return;
+                FixVf1Button.IsEnabled = true;
+                FixVf2Button.IsEnabled = true;
+                DeployNewButton.IsEnabled = true;
+            });
+            
+        }).Start();
+    }
+
+    private void FixVf1Button_OnClick(object? sender, RoutedEventArgs e)
+    {
+        ClearLog();
+        Relock("Juurutamine...");
+        new Thread(() =>
+        {
+            if (_edition == null) return;
+            _edition.Reverificate();
+            Dispatcher.UIThread.Post(() => AppendLog("Genereeritud räsi: " + _edition.Hash));
+            var vf2 = _edition.Verifile2();
+            Dispatcher.UIThread.Post(() => AppendLog("Verifile 2 olek: " + vf2));
+            if (vf2 != "VERIFIED")
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    AppendLog("Verifile 2.0 kontroll nurjus. Peate arvuti nullist juurutama.");
+                    Unlock();
+                });
+                return;
+            }
+            _edition.UnlockVF2();
+            Dispatcher.UIThread.Post(() => AppendLog("Verifile 2.0 avatud"));
+            // sleep to avoid race conditions
+            Thread.Sleep(5000);
+            _edition.SaveEditionInfo();
+            Dispatcher.UIThread.Post(() => AppendLog("Väljaande info salvestatud"));
+            _edition.RelockVF2();
+            Dispatcher.UIThread.Post(() => AppendLog("Juurutamine õnnestus!"));
+            Dispatcher.UIThread.Post(Unlock);
+        }).Start();
     }
 }

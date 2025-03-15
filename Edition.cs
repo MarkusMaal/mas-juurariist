@@ -400,4 +400,134 @@ public class Edition
         sb.AppendLine($"Nimi: {Name}");
         return sb.ToString();
     }
+
+    private string CheckRootFile(string file, bool failable = false)
+    {
+        return (File.Exists(MasRoot + "/" + file) ? "OK" : failable ? "WARN" : "FAIL");
+    }
+
+    private string TestFiles(string msg, string[] files)
+    {
+        string result = $"-> {msg}\n";
+        foreach (string file in files)
+        {
+            result += $"{file}: " + CheckRootFile(file) + "\n";
+        }
+
+        return result;
+    }
+    
+    public string PerformTests()
+    {
+        string result = "";
+        string[] commonfiles =
+        [
+            "bg_common.png", "bg_desktop.png", "bg_login.png", "bg_uncommon.png", "bg_mobile.png", "bg_mobile_lock.png",
+            "bg_tablet.png", "bg_tablet_lock.png", "verifile2.jar", "mas.ico", "mas_general.png", "mas_virtualpc.ico"
+        ];
+        result += TestFiles("Oluliste failide olemasolu testimine", commonfiles);
+        result += "edition.txt: " + CheckRootFile("edition.txt", true) + "\n";
+        result += "edition_1.txt: " + CheckRootFile("edition_1.txt", true) + "\n";
+        string[] rd_tests = ["maia/server.py", "maia/whitelist.txt", "maia/mas_general.ico"];
+        if (OperatingSystem.IsWindows())
+        {
+            string[] testfiles = ["Veebibrauser.lnk", "update_bg.ps1", "explorer.bat", "finalize_install.bat", "game_optimize.bat", "game_preoptimize.bat", "game_restore.bat", "info.bat", "redoexp.cmd", "remas.bat", "ScreenShot.ps1", "servicestart.bat"];
+            string[] rainmeter_tests = ["swap_desktop.bat", "swap_desktop_flash.bat", "swap_desktop_rainmeter.bat", "organize_desktop.bat", "start_rainmeter.bat", "startup_optimize.bat"];
+            string[] it_tests = ["itstart.bat", "opan_mas.bat"];
+            result += TestFiles("Windowsi failide testimine", testfiles);
+            if (Features.Contains("RM"))
+            {
+                result += TestFiles("Rainmeter testid", rainmeter_tests);
+            }
+            if (Features.Contains("IT"))
+            {
+                result += TestFiles("Interaktiivse töölaua testid", it_tests);
+            }
+
+        } else if (OperatingSystem.IsLinux())
+        {
+            result += $"-> Linuxi failide testimine\n";
+            string[] linuxfiles = ["scripts/Tools.sh", ".mas/attach.sh", ".mas/detach.sh", ".mas/restart_plasma.sh"];
+            foreach (string file in linuxfiles)
+            {
+                result += $"{file}: " + (File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/" + file) ? "OK" : "FAIL") + "\n";
+            }
+
+        }
+        if (Features.Contains("RD"))
+        {
+            result += TestFiles("Kaugtöölaua testid", rd_tests);
+        }
+
+        if (result.Contains("FAIL"))
+        {
+            result += "\nSeda arvutit ei saa juurutada, kuna see ei vasta nõuetele";
+        }
+
+        else if (result.Contains("WARN"))
+        {
+            result += "\nSee arvuti ei ole tõenäoliselt juurutatud, aga muidu vastab nõuetele";
+        }
+        else
+        {
+            result += "\nSee arvuti vastab juurutamise nõuetele";   
+        }
+        return result;
+    }
+
+    public void Reverificate()
+    {
+        this.Hash = q();
+    }
+
+    public void SaveEditionInfo()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        using var sw = new StreamWriter(MasRoot + "/edition.txt", false);
+        sw.Write("[Edition_info]\n");
+        sw.Write(EditionName + "\n");
+        sw.Write(Version + "\n");
+        sw.Write(BuildNo + "\n");
+        sw.Write((Tested ? "Yes" : "No") + "\n");
+        sw.Write(Username + "\n");
+        sw.Write(Language + "\n");
+        sw.Write(WinVer + "\n");
+        sw.Write(string.Join("-", Features.ToArray()) + "\n");
+        sw.Write(Pin + "\n");
+        sw.Write(Name + "\n");
+        sw.Write(Hash);
+        sw.Close();
+    }
+
+    public void UnlockVF2()
+    {
+        BuildJavaFinder();
+        Process p = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = FindJava(),
+                Arguments = "-jar " + Path.GetTempPath() + "verifile2.jar -w",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            }
+        };
+        p.Start();
+        while (!p.StandardOutput.EndOfStream)
+        {
+            if (p.StandardOutput.ReadLine().Contains("Authentication OK"))
+            {
+                break;
+            }
+        }
+    }
+
+    public void RelockVF2()
+    {
+        using StreamWriter sw = new StreamWriter(MasRoot + "/vf2.done", false);
+        sw.Write("Verifile 2.0 relock request");
+        sw.Close();
+    }
 }

@@ -32,10 +32,10 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel>
           <WrapPanel Margin="0,10">
-            <Button>Soorita testid</Button>
-            <Button IsEnabled="False">Paranda Verifile 1.0 räsi</Button>
-            <Button IsEnabled="False">Paranda Verifile 2.0 räsi</Button>
-            <Button IsEnabled="False">Juuruta uue seadmena</Button>
+            <Button Name="DeployTestsButton" Click="DeployTestsButton_OnClick">Soorita testid</Button>
+            <Button Name="FixVf1Button" IsEnabled="False" Click="FixVf1Button_OnClick">Paranda Verifile 1.0 räsi</Button>
+            <Button Name="FixVf2Button" IsEnabled="False">Paranda Verifile 2.0 räsi</Button>
+            <Button Name="DeployNewButton" IsEnabled="False">Juuruta uue seadmena</Button>
           </WrapPanel>
           <TextBlock TextWrapping="Wrap">
             Juurutamise valikud pole saadaval enne kui vastavad testid ei ole läbitud.
@@ -47,12 +47,12 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel>
             <WrapPanel Margin="0,10">
-              <Button PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited">Kuva ühendatud ADB seadmed</Button>
-              <Button PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited">Uuenda taustapildid</Button>
-              <Button PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited">Taaskäivita alglaadurisse</Button>
-              <Button PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited">Taaskäivita taastekeskkonda</Button>
-              <Button PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited">Taaskäivita süsteemi UI</Button>
-              <Button PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited">Taaskäivita</Button>
+              <Button Click="AdbDevices_OnClick" PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited">Kuva ühendatud ADB seadmed</Button>
+              <Button Name="AdbWallpaperUpdate" Click="AdbWallpaperUpdate_OnClick" PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited">Uuenda taustapildid</Button>
+              <Button PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited" Click="AdbRebootFastboot_OnClick">Taaskäivita alglaadurisse</Button>
+              <Button PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited" Click="AdbRebootRecovery_OnClick">Taaskäivita taastekeskkonda</Button>
+              <Button Name="AdbSystemUiReboot" PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited" Click="AdbSystemUiReboot_OnClick">Taaskäivita süsteemi UI</Button>
+              <Button PointerMoved="ADB_Buttons_OnPointerMoved" PointerExited="ADB_Buttons_OnPointerExited" Click="AdbRebootSystem_OnClick">Taaskäivita</Button>
             </WrapPanel>
             <TextBlock TextWrapping="Wrap" Name="ExplainADB">
               Liikuge hiirekursoriga soovitud nupu peale, et lisainfot saada.
@@ -87,6 +87,8 @@
     <Grid.Styles>
       <Style Selector="TabControl > TabItem">
         <Setter Property="FontSize" Value="16"></Setter>
+        <Setter Property="FontFamily" Value="Sans" />
+        <Setter Property="FontWeight" Value="Normal" />
       </Style>
       <Style Selector="WrapPanel > Button">
         <Setter Property="Margin" Value="0,0,10,10"></Setter>
