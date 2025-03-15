@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using HardwareInformation;
@@ -10,26 +13,86 @@ namespace Markuse_asjade_juurutamise_tööriist;
 
 public class Edition
 {
+    
+    /// <summary>
+    /// Edition name (e.g. Pro, Premium, Basic+)
+    /// </summary>
     public string EditionName { get; set; }
+    
+    /// <summary>
+    /// Version number (e.g. 10.4)
+    /// </summary>
     public string Version { get; set; }
+    
+    /// <summary>
+    /// Build number - first letter(s) represent(s) the initial(s) for the edition name, next few numbers represent major version number and remaining numbers represent minor revisions. The last lowercase letter represents device type (a = physical desktop computer, b = virtual computer, c = tablet)
+    /// </summary>
     public string BuildNo { get; set; }
+    
+    /// <summary>
+    /// Boolean representing if a system integrity check has been run during the deployment process, stored in edition.txt as either "Yes" or "No"
+    /// </summary>
     public bool Tested { get; set; }
+    
+    /// <summary>
+    /// The user who initially started the deployment process for this computer
+    /// </summary>
     public string Username { get; set; }
+    
+    /// <summary>
+    /// System language during the deployment process
+    /// </summary>
     public string Language { get; set; }
+    
+    /// <summary>
+    /// Operating system kernel version during the initial deployment process
+    /// </summary>
     public string WinVer { get; set; }
-    public string[] Features { get; set; }
+    
+    /// <summary>
+    /// List of optional features, stored in edition.txt with dashes (-) used as separators
+    /// </summary>
+    public List<string> Features { get; set; }
+    
+    /// <summary>
+    /// Insecure PIN code for this computer, for legacy compatibility
+    /// </summary>
     public string Pin { get; set; }
+    
+    /// <summary>
+    /// Name for the current version
+    /// </summary>
     public string Name { get; set; }
+    
+    /// <summary>
+    /// Verifile 1.0 hash
+    /// </summary>
     public string Hash { get; set; }
 
+    /// <summary>
+    /// Determines if this computer is unable to generate valid Verifile 1.0 hashes
+    /// </summary>
     public bool Unsupported { get; set; }
 
-    public string MasRoot { get; set; }
+    /// <summary>
+    /// Root directory for Markus' stuff deployment
+    /// </summary>
+    public required string MasRoot { get; set; }
     
-    private MachineInformation hwinfo = MachineInformationGatherer.GatherInformation(true);
+    /// <summary>
+    /// Hardware information object
+    /// </summary>
+    private MachineInformation? hwinfo;
     
+    /// <summary>
+    /// App object
+    /// </summary>
     private App? app = ((App?)App.Current);
 
+    /// <summary>
+    /// Constructor for Edition class taking the path to edition.txt as input
+    /// </summary>
+    /// <param name="textFile">Full path to edition.txt file</param>
     public Edition(string textFile)
     {
         string[] lines;
@@ -37,21 +100,29 @@ public class Edition
         {
             lines = readText.ReadToEnd().Split('\n');
         }
-        EditionName = lines[0];
-        Version = lines[1];
-        BuildNo = lines[2];
-        Tested = lines[3] == "Yes";
-        Username = lines[4];
-        Language = lines[5];
-        WinVer = lines[6];
-        Features = lines[7].Split('-');
-        Pin = lines[8];
-        Name = lines[9];
-        Hash = lines[10];
-        Unsupported = false;
+        EditionName = lines[1];
+        Version = lines[2];
+        BuildNo = lines[3];
+        Tested = lines[4] == "Yes";
+        Username = lines[5];
+        Language = lines[6];
+        WinVer = lines[7];
+        Features = lines[8].Split('-').ToList();
+        Pin = lines[9];
+        Name = lines[10];
+        Hash = lines[11];
+        if (RuntimeInformation.ProcessArchitecture == Architecture.X86 || RuntimeInformation.ProcessArchitecture == Architecture.X64)
+        {
+            hwinfo = MachineInformationGatherer.GatherInformation();
+        }
+
+        Unsupported = hwinfo == null;
     }
     
-    
+    /// <summary>
+    /// Run Verifile 1.0 attestation
+    /// </summary>
+    /// <returns>Attestation result as bool (true = pass, false = fail)</returns>
     public bool Verifile()
     {
         string verificatable = q();
@@ -66,11 +137,15 @@ public class Edition
         return false;
     }
 
+    /// <summary>
+    /// Generate Verifile 1.0 hash
+    /// </summary>
+    /// <returns>Hash in hexadecimal format (lower case)</returns>
     public string q()
     {
         try
         {
-            string CPIProcessorID = "CPI0" + ProcessorID().Substring(1);
+            string CPIProcessorID = "CPI0" + ProcessorId().Substring(1);
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             string SHA1HashOfTrimmedEditionInfo = SHA1Hash(RemoveLinesFromBottomUntilPINAddNewLine(File.ReadAllText(MasRoot + "/edition.txt", Encoding.GetEncoding(1252))));
 
@@ -85,6 +160,11 @@ public class Edition
         }
     }
 
+    /// <summary>
+    /// Trim edition info
+    /// </summary>
+    /// <param name="s">Contents of edition.txt</param>
+    /// <returns>Contents without version name and verifile hash</returns>
     static string RemoveLinesFromBottomUntilPINAddNewLine(string s)
     {
         string[] sar = s.Split('\n');
@@ -95,17 +175,32 @@ public class Edition
         }
         return ns;
     }
+    
+    /// <summary>
+    /// Request BIOS version
+    /// </summary>
+    /// <returns>SmBios.BIOSVersion string value and carriage return at the end</returns>
     private string BIOS()
     {
         return hwinfo.SmBios.BIOSVersion.ToString() + "\r";
     }
 
-    public string ProcessorID()
+    /// <summary>
+    /// Sends a CPUID command to your processor to get its ID (not always unique)
+    /// </summary>
+    /// <returns>Hexadecimal representation of CPUID value</returns>
+    private string ProcessorId()
     {
         if (app == null) return "";
         return app.GetCpuId();
     }
-    public static string SHA1Hash(string z)
+    
+    /// <summary>
+    /// Calculate SHA-1 hash for a string
+    /// </summary>
+    /// <param name="z">String to be hashed</param>
+    /// <returns>Hexadecimal representation of hashed string</returns>
+    private static string SHA1Hash(string z)
     {
         SHA1 cx = SHA1.Create();
         byte[] xx = Encoding.ASCII.GetBytes(z);
@@ -118,7 +213,13 @@ public class Edition
         }
         return t.ToString();
     }
-    public static string MD5Hash(string z)
+    
+    /// <summary>
+    /// Calculate MD5 hash for a string
+    /// </summary>
+    /// <param name="z">String to be hashed</param>
+    /// <returns>Hexadecimal representation of hashed string</returns>
+    private static string MD5Hash(string z)
     {
         MD5 cx = MD5.Create();
         byte[] xx = Encoding.ASCII.GetBytes(z);
@@ -132,6 +233,9 @@ public class Edition
         return t.ToString();
     }
 
+    /// <summary>
+    /// Get baseboard product. Currently dummy empty string, since Verifile 1.0 tended to return "" for this often.
+    /// </summary>
     public string BaseboardProduct {
         get
         {
@@ -238,7 +342,11 @@ public class Edition
         return latest_path;
     }
     
-    private string Verifile2()
+    /// <summary>
+    /// Run Verifile 2.0 attestation check
+    /// </summary>
+    /// <returns>Attestation result (e.g. VERIFIED, FAILED, TAMPERED, etc.)</returns>
+    public string Verifile2()
     {
         BuildJavaFinder();
         Process p = new Process
@@ -261,19 +369,35 @@ public class Edition
         }
         return "FAILED";
     }
-
-    // change backslashes to forward slashes in case we're not in Windows
-    private string BackForwardSlash(string path)
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            path = path.Replace("\\", "/");
-        }
-        return path;
-    }
-
+    
+    /// <summary>
+    /// Gets BIOS ID for current machine
+    /// </summary>
+    /// <returns>First block of BIOS ID for your system</returns>
     public string GetBios()
     {
-        
+        if (!Unsupported)
+        {
+            return hwinfo.SmBios.BIOSVersion;
+        }
+        else
+        {
+            return "N/A";
+        }
+    }
+    
+    public override string ToString()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"Väljaanne: {EditionName}");
+        sb.AppendLine($"Versioon: {Version}");
+        sb.AppendLine($"Järgunumber: {BuildNo}");
+        sb.AppendLine("Testitud: " + (Tested ? "Jah" : "Ei"));
+        sb.AppendLine($"Kasutajanimi: {Username}");
+        sb.AppendLine($"Kerneli versioon: {WinVer}");
+        sb.AppendLine("Funktsioonid: " + string.Join("-", Features.ToArray()));
+        sb.AppendLine($"Ebaturvaline PIN kood: {Pin}");
+        sb.AppendLine($"Nimi: {Name}");
+        return sb.ToString();
     }
 }

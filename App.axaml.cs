@@ -4,7 +4,6 @@ using System.IO;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using HardwareInformation;
 
 namespace Markuse_asjade_juurutamise_tööriist;
 
