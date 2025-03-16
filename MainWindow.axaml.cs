@@ -198,7 +198,7 @@ public partial class MainWindow : Window
         AppendLog("Versioon 1.0");
         AppendLog("Võimaldab Verifile 1.0 ja 2.0 räsisid genereerida");
         AppendLog("Autor: Markus Maal");
-        AppendLog("Kuupäev: 15.03.2025");
+        AppendLog("Kuupäev: 16.03.2025");
         AppendLog("\n(c) 2025 Kõik õigused on kaitstud");
     }
 

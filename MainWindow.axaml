@@ -24,7 +24,7 @@
           </StackPanel>
         </ScrollViewer>
       </TabItem>
-      <TabItem Header="Väljaande info" IsSelected="True">
+      <TabItem Header="Väljaande info">
         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
           <StackPanel>
             <WrapPanel HorizontalAlignment="Right">
