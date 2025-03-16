@@ -4,7 +4,9 @@
     <option name="projectPerEditor">
       <map>
         <entry key="App.axaml" value="Markuse asjade juurutamise tööriist.csproj" />
+        <entry key="EditionEditInfoForm.axaml" value="Markuse asjade juurutamise tööriist.csproj" />
         <entry key="MainWindow.axaml" value="Markuse asjade juurutamise tööriist.csproj" />
+        <entry key="SecurityCode.axaml" value="Markuse asjade juurutamise tööriist.csproj" />
       </map>
     </option>
   </component>

@@ -99,7 +99,14 @@ public class Edition
         using (var readText = new StreamReader(textFile))
         {
             lines = readText.ReadToEnd().Split('\n');
+            readText.Close();
         }
+
+        ParseLines(lines);
+    }
+
+    public void ParseLines(string[] lines)
+    {
         EditionName = lines[1];
         Version = lines[2];
         BuildNo = lines[3];
@@ -118,6 +125,27 @@ public class Edition
 
         Unsupported = hwinfo == null;
     }
+
+    public Edition()
+    {
+        EditionName = "Tundmatu";
+        Version = "0.0";
+        BuildNo = "_000000a";
+        Username = Environment.UserName;
+        Language = CultureInfo.CurrentCulture.TwoLetterISOLanguageName;
+        WinVer = Environment.OSVersion.Version.Major + "." + Environment.OSVersion.Version.Minor;
+        Features = [];
+        Pin = new Random().Next(0, 9999).ToString().PadLeft(4, '0');
+        Name = "Nimetu";
+        Hash = "";
+        MasRoot = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/.mas";
+        if (RuntimeInformation.ProcessArchitecture == Architecture.X86 || RuntimeInformation.ProcessArchitecture == Architecture.X64)
+        {
+            hwinfo = MachineInformationGatherer.GatherInformation();
+        }
+
+        Unsupported = hwinfo == null;
+    }
     
     /// <summary>
     /// Run Verifile 1.0 attestation
@@ -126,6 +154,10 @@ public class Edition
     public bool Verifile()
     {
         string verificatable = q();
+        if (!File.Exists(MasRoot + "/edition.txt"))
+        {
+            return false;
+        }
         string[] savedstr = File.ReadAllText(MasRoot + "/edition.txt", Encoding.GetEncoding(1252)).ToString()
             .Split('\n');
         string sttr = savedstr[savedstr.Length - 1];
@@ -529,5 +561,59 @@ public class Edition
         using StreamWriter sw = new StreamWriter(MasRoot + "/vf2.done", false);
         sw.Write("Verifile 2.0 relock request");
         sw.Close();
+    }
+
+    private static void DecryptFile(string inputFile, string outputFile, byte[] key, byte[] iv)
+    {
+        using var fileStream = new FileStream(outputFile, FileMode.Create);
+        using var aes = Aes.Create();
+        aes.Key = key;
+        aes.IV = iv;
+
+        ICryptoTransform decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
+
+        using var cryptoStream = new CryptoStream(fileStream, decryptor, CryptoStreamMode.Write);
+        using var outputFileStream = new FileStream(inputFile, FileMode.Open);
+        outputFileStream.CopyTo(cryptoStream);
+    }
+
+    public bool DecryptSecdata(string key)
+    {
+        File.WriteAllBytes(Path.GetTempPath() + "/secdata.enc", Properties.Resources.secdata_enc);
+        try
+        {
+            DecryptFile(Path.GetTempPath() + "/secdata.enc", Path.GetTempPath() + "/signer.jar",
+                Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(key));
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($@"ERROR: {e.Message}");
+            return false;
+        }
+
+        File.Delete(Path.GetTempPath() + "/secdata.enc");
+        using var sr = new StreamReader(Path.GetTempPath() + "/signer.jar");
+        var buff = new char[2];
+        var data = sr.ReadBlock(buff);
+        sr.Close();
+        return buff[0] == 0x50 && buff[1] == 0x4B; // PK header present or not. If it is, then decryption is successful.
+    }
+
+    public void StartSign()
+    {
+        BuildJavaFinder();
+        var p = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = FindJava(),
+                Arguments = "-jar " + Path.GetTempPath() + "signer.jar -w",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            }
+        };
+        p.Start();
     }
 }

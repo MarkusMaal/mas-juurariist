@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" Width="550" Height="600"
+        x:Class="Markuse_asjade_juurutamise_tööriist.EditionEditInfoForm"
+        Title="Markuse arvuti asjade taasjuurutamine" Loaded="Control_OnLoaded"
+        Closing="Window_OnClosing">
+ <StackPanel Margin="10">
+    <Label FontSize="24">Juurutamine</Label>
+    <TextBlock TextWrapping="Wrap">Palun täitke kõik kästsi muudetavad väljad. Ärge lülitage arvutit välja ega katkestage ootamatult programmi tööd. Toimingu katkestamiseks kasutage X nuppu akna ülemises paremas nurgas (või punasti ringi macOS süsteemides).</TextBlock>
+    <StackPanel Orientation="Horizontal" Margin="0,10">
+      <Label VerticalAlignment="Center">Väljaanne</Label>
+      <ComboBox Name="EditionBox" Margin="20,0" MinWidth="150" SelectedIndex="1">
+        <ComboBoxItem>Ultimate</ComboBoxItem>
+        <ComboBoxItem>Pro</ComboBoxItem>
+        <ComboBoxItem>Premium</ComboBoxItem>
+        <ComboBoxItem>Basic</ComboBoxItem>
+      </ComboBox>
+    </StackPanel>
+    <StackPanel Orientation="Horizontal">
+      <Label VerticalAlignment="Center">Versiooninumber</Label>
+      <TextBox Name="VersionBox" Margin="20,0" MinWidth="150">0.0</TextBox>
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" Margin="0,10">
+      <Label VerticalAlignment="Center">Järgunumber</Label>
+      <TextBox Name="BuildBox" Margin="20,0" MinWidth="150" TextChanged="BuildBox_OnTextChanged">A00000a</TextBox>
+    </StackPanel>
+    <Label Name="label6">Juurutatud: Jah (automaatne väli)</Label>
+    <Label Name="label7">Juurutaja: Markus Maal (automaatne väli)</Label>
+    <Label Name="label8">Keel: et-EE (automaatne väli)</Label>
+    <Label Name="label9">Tuuma versioon: 6.4 (automaatne väli)</Label>
+    <Label Name="label11">PIN kood: 0000 (automaatne väli)</Label>
+    <Label Margin="0,10">Funktsioonid</Label>
+    <WrapPanel>
+      <CheckBox Name="ITBox" Margin="7,0">Interaktiivne töölaud</CheckBox>
+      <CheckBox Name="WXBox" Margin="7,0">Windows 10</CheckBox>
+      <CheckBox Name="CSBox" Margin="7,0">Klassikaline start menüü</CheckBox>
+      <CheckBox Name="IPBox" Margin="7,0" IsChecked="True">Integratsioonitarkvara</CheckBox>
+      <CheckBox Name="GPBox" Margin="7,0" IsChecked="False">Grupipoliitika</CheckBox>
+      <CheckBox Name="RDBox" Margin="7,0" IsChecked="False">Kaugjuhtimine</CheckBox>
+      <CheckBox Name="TSMMBox" Margin="7,0" IsChecked="True">Standardfunktsioonid</CheckBox>
+      <CheckBox Name="DXBox" Margin="7,0" IsChecked="False">Rainmeter</CheckBox>
+      <CheckBox Name="LTBox" Margin="7,0" IsChecked="False">LiveTuner optimeerimised</CheckBox>
+    </WrapPanel>
+    <StackPanel Orientation="Horizontal" Margin="0,10">
+      <Label VerticalAlignment="Center">Nimi</Label>
+      <TextBox Name="NameBox" Margin="20,0" MinWidth="150">Alpha</TextBox>
+    </StackPanel>
+    <WrapPanel>
+      <Button Click="RootClick">Juurutamine</Button>
+      <Button Margin="20,0" Click="Button_Click">Laadi sobivad andmed praegusest juurutusfailist</Button>
+    </WrapPanel>
+  </StackPanel>
+</Window>

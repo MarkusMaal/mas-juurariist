@@ -6,7 +6,8 @@ namespace Markuse_asjade_juurutamise_tööriist;
 
 class Program
 {
-
+    public static bool RootOk = false;
+    public static bool RootCancel = true;
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.

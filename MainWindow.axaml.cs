@@ -33,21 +33,38 @@ public partial class MainWindow : Window
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/.mas",
             Environment.GetEnvironmentVariable("HOMEDRIVE") + "/mas"
         ];
+        bool exists = false;
         foreach (var path in possiblePaths)
         {
             if (!File.Exists(path + "/edition.txt")) continue;
             _masRoot = path;
+            exists = true;
             break;
         }
 
-        _edition = new Edition(_masRoot + "/edition.txt")
+        if (exists)
         {
-            MasRoot = _masRoot
-        };
+            _edition = new Edition(_masRoot + "/edition.txt")
+            {
+                MasRoot = _masRoot
+            };
+        }
+        else
+        {
+            _edition = new Edition()
+            {
+                MasRoot = _masRoot
+            };
+        }
+
         var cpuid = _app.GetCpuId();
         var bios = _edition.GetBios();
         var verificate = _edition.q();
-        var verificate2 = CalculateSha256(_masRoot + "/verifile2.dat");
+        var verificate2 = "";
+        if (File.Exists(_masRoot + "/verifile2.dat"))
+        {
+            verificate2 = CalculateSha256(_masRoot + "/verifile2.dat");
+        }
         var vf1 = _edition.Verifile();
         var vf2 = _edition.Verifile2();
         _moboId = _moboId != "" ? _moboId : "N/A";
@@ -59,6 +76,11 @@ public partial class MainWindow : Window
             Verifile1Hash.Text = "Verifile 1.0 räsi: " + verificate + "\nVerifile 1.0 olek: " +
                                  (vf1 ? "OK" : !_edition.Unsupported ? "Vajab juurutamist" : "N/A");
             Verifile2State.Text = "Verifile 2.0 räsi: " + verificate2 + "\nVerifile 2.0 olek: " + vf2;
+            if (!vf1 && (vf2 == "VERIFIED"))
+            {
+                FixVf1Button.IsEnabled = true;
+            }
+            RerootButton.IsEnabled = vf1 && (vf2 == "VERIFIED");
             Unlock();
             ClearLog();
             if (vf1 && (vf2 == "VERIFIED"))
@@ -406,8 +428,6 @@ public partial class MainWindow : Window
                 AppendLog(testLog);
                 Unlock();
                 if (LogOutput.Text!.Contains("FAIL")) return;
-                FixVf1Button.IsEnabled = true;
-                FixVf2Button.IsEnabled = true;
                 DeployNewButton.IsEnabled = true;
             });
             
@@ -424,7 +444,7 @@ public partial class MainWindow : Window
             _edition.Reverificate();
             Dispatcher.UIThread.Post(() => AppendLog("Genereeritud räsi: " + _edition.Hash));
             var vf2 = _edition.Verifile2();
-            Dispatcher.UIThread.Post(() => AppendLog("Verifile 2 olek: " + vf2));
+            Dispatcher.UIThread.Post(() => AppendLog("Verifile 2.0 olek: " + vf2));
             if (vf2 != "VERIFIED")
             {
                 Dispatcher.UIThread.Post(() =>
@@ -442,6 +462,116 @@ public partial class MainWindow : Window
             Dispatcher.UIThread.Post(() => AppendLog("Väljaande info salvestatud"));
             _edition.RelockVF2();
             Dispatcher.UIThread.Post(() => AppendLog("Juurutamine õnnestus!"));
+            Dispatcher.UIThread.Post(Unlock);
+        }).Start();
+    }
+
+    private void RerootButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        ClearLog();
+        Relock("Taasjuurutamine...");
+        new Thread(() =>
+        {
+            Dispatcher.UIThread.Post(() => AppendLog("Verifile 2.0 avamine"));
+            _edition!.UnlockVF2();
+            Thread.Sleep(5000); // avoid race conditions
+            Dispatcher.UIThread.Post(() =>
+            {
+                AppendLog("Juurutamisvormi avamine...");
+                new EditionEditInfoForm
+                {
+                    mas_root = _edition.MasRoot
+                }.Show();
+                AppendLog("Kasutaja ootamine (oleku kontroll 500ms intervallides)");
+            });
+            Program.RootCancel = false;
+            Program.RootOk = false;
+            Thread.Sleep(100); // avoid race conditions
+            while (!Program.RootCancel && !Program.RootOk)
+            {
+                // sleep to avoid lock-ups
+                Thread.Sleep(500);
+            }
+
+            if (Program.RootCancel)
+            {
+                Dispatcher.UIThread.Post( () => AppendLog("Toiming katkestati. Verifile 2.0 sulgemine..."));
+                _edition.RelockVF2();
+                Thread.Sleep(5000); // avoid race conditions
+                Dispatcher.UIThread.Post( () => AppendLog("Taasjuurutamine katkestati!"));
+                Dispatcher.UIThread.Post(Unlock);
+                return;
+            }
+            
+            Dispatcher.UIThread.Post( () => AppendLog("Uued andmed kirjutati väljaande faili. Verifile 1.0 räsi genereerimine..."));
+            _edition = new Edition(_masRoot + "/edition.txt")
+            {
+                MasRoot = _masRoot
+            };
+            _edition.Reverificate();
+            Dispatcher.UIThread.Post( ()  => AppendLog("Räsi salvestamine..."));
+            _edition.SaveEditionInfo();
+            Dispatcher.UIThread.Post(() => AppendLog("Verifile 2.0 sulgemine..."));
+            _edition.RelockVF2();
+            Thread.Sleep(5000); // avoid race conditions
+            Dispatcher.UIThread.Post(() =>AppendLog("Info värskendamine..."));
+            UpdateStatusLabelText();
+            Dispatcher.UIThread.Post(() =>AppendLog("Taasjuurutamine õnnestus!"));
+            Dispatcher.UIThread.Post(Unlock);
+        }).Start();
+    }
+
+    private async void EditInfoButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        var editInfoForm = new EditionEditInfoForm()
+        {
+            mas_root = _edition!.MasRoot,
+            ReadOnly = true
+        };
+        await editInfoForm.ShowDialog(this);
+        if (!Program.RootOk) return;
+        _edition.ParseLines(editInfoForm.editionData.Split('\n'));
+        EditionDetails.Text = _edition.ToString();
+    }
+
+    private async void DeployNewButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        var sc = new SecurityCode();
+        await sc.ShowDialog(this);
+        if (!sc.DialogResult) return;
+        string secret = sc.ScCode.Text!;
+        Relock("Juurutamine...");
+        ClearLog();
+        AppendLog("Koodi kontrollimine...");
+        new Thread(() =>
+        {
+            if (!_edition!.DecryptSecdata(secret))
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    AppendLog("Vale turvakood!");
+                    Unlock();
+                });
+                return;
+            }
+            Dispatcher.UIThread.Post( () => AppendLog("Õige turvakood. Väljaande info salvestamine ilma räsita..."));
+            _edition.SaveEditionInfo();
+            Dispatcher.UIThread.Post( () => AppendLog("Verifile räsi genereerimine..."));
+            _edition.Reverificate();
+            Dispatcher.UIThread.Post( () => AppendLog("Väljaande info salvestamine koos räsiga..."));
+            _edition.SaveEditionInfo();
+            Thread.Sleep(1000);
+            Dispatcher.UIThread.Post( () => AppendLog("Märgistaja käivitamine..."));
+            _edition.StartSign();
+            Thread.Sleep(5000);
+            Dispatcher.UIThread.Post( () => AppendLog("Märgistaja sulgemine..."));
+            File.WriteAllText(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/.mas/vf2.done", "");
+            Thread.Sleep(5000);
+            Dispatcher.UIThread.Post( () => AppendLog("Märgistaja kustutamine..."));
+            File.Delete(Path.GetTempPath() + "/signer.jar");
+            Dispatcher.UIThread.Post( () => AppendLog("Info värskendamine..."));
+            UpdateStatusLabelText();
+            Dispatcher.UIThread.Post( () => AppendLog("Õnnestus!"));
             Dispatcher.UIThread.Post(Unlock);
         }).Start();
     }

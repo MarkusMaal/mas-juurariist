@@ -72,5 +72,19 @@ namespace Markuse_asjade_juurutamise_tööriist.Properties {
                 return ((byte[])(obj));
             }
         }
+        
+        internal static byte[] secdata_enc {
+            get {
+                object obj = ResourceManager.GetObject("secdata_enc", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+        
+        internal static byte[] tree {
+            get {
+                object obj = ResourceManager.GetObject("tree", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
     }
 }
