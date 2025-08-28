@@ -381,12 +381,12 @@ public class Edition
     public string Verifile2()
     {
         BuildJavaFinder();
-        Process p = new Process
+        Process p = new()
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = FindJava(),
-                Arguments = "-jar " + Path.GetTempPath() + "verifile2.jar",
+                Arguments = " -jar \"" + (Path.GetTempPath() + "verifile2.jar").Replace("\\", "/") + "\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 CreateNoWindow = true,
@@ -394,12 +394,8 @@ public class Edition
             }
         };
         p.Start();
-        while (!p.StandardOutput.EndOfStream)
-        {
-            string line = p.StandardOutput.ReadLine() ?? "";
-            return line.Split('\n')[0];
-        }
-        return "FAILED";
+        string line = p.StandardOutput.ReadToEnd() ?? "";
+        return line.Split('\n')[0];
     }
     
     /// <summary>
