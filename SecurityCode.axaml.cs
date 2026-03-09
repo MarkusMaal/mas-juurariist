@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 
@@ -15,6 +16,18 @@ public partial class SecurityCode : Window
 
     private void ConfirmButton_OnClick(object? sender, RoutedEventArgs e)
     {
+        DialogResult = true;
+        Close();
+    }
+
+    private void Control_OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        ScCode.Focus();
+    }
+
+    private void ScCode_OnKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
         DialogResult = true;
         Close();
     }

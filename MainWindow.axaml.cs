@@ -42,21 +42,12 @@ public partial class MainWindow : Window
             break;
         }
 
-        if (exists)
+        if (!exists)
         {
-            _edition = new Edition(_masRoot + "/edition.txt")
-            {
-                MasRoot = _masRoot
-            };
-        }
-        else
-        {
-            _edition = new Edition()
-            {
-                MasRoot = _masRoot
-            };
+            _masRoot = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/.mas";
         }
 
+        _edition = exists ? new Edition(_masRoot + "/edition.txt") : new Edition();
         var cpuid = _app.GetCpuId();
         var bios = _edition.GetBios();
         var verificate = _edition.q();
@@ -504,10 +495,7 @@ public partial class MainWindow : Window
             }
             
             Dispatcher.UIThread.Post( () => AppendLog("Uued andmed kirjutati väljaande faili. Verifile 1.0 räsi genereerimine..."));
-            _edition = new Edition(_masRoot + "/edition.txt")
-            {
-                MasRoot = _masRoot
-            };
+            _edition = new Edition(_masRoot + "/edition.txt");
             _edition.Reverificate();
             Dispatcher.UIThread.Post( ()  => AppendLog("Räsi salvestamine..."));
             _edition.SaveEditionInfo();
@@ -530,8 +518,16 @@ public partial class MainWindow : Window
         };
         await editInfoForm.ShowDialog(this);
         if (!Program.RootOk) return;
-        _edition.ParseLines(editInfoForm.editionData.Split('\n'));
-        EditionDetails.Text = _edition.ToString();
+        try
+        {
+            _edition = new Edition();
+            _edition.ParseLines(editInfoForm.editionData.Split('\n'));
+            EditionDetails.Text = _edition.ToString();
+        }
+        catch
+        {
+            // ignore
+        }
     }
 
     private async void DeployNewButton_OnClick(object? sender, RoutedEventArgs e)
@@ -545,7 +541,8 @@ public partial class MainWindow : Window
         AppendLog("Koodi kontrollimine...");
         new Thread(() =>
         {
-            if (!_edition!.DecryptSecdata(secret))
+            var output = _edition.GenerateDummyCertificate(secret);
+            if (output.Contains("ERROR: Wrong security code"))
             {
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -554,21 +551,36 @@ public partial class MainWindow : Window
                 });
                 return;
             }
-            Dispatcher.UIThread.Post( () => AppendLog("Õige turvakood. Väljaande info salvestamine ilma räsita..."));
-            _edition.SaveEditionInfo();
+            Dispatcher.UIThread.Post( () => AppendLog("Kood õige"));
+
+            if (output.Contains("ERROR:"))
+            {
+                var eCode = output.Split("ERROR: ")[1].Split('\n')[0];
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (eCode == "Can't generate a dummy signature if another signature is already present!")
+                    {
+                        AppendLog("Seade on juba juurutatud, palun kasuta taasjuurutamise valikut \"Väljaande info\" vahekaardil");   
+                    }
+                    else
+                    {
+                        AppendLog("Ilmnes viga: " + eCode);
+                    }
+                    Unlock();
+                });
+                return;
+            }
+            Dispatcher.UIThread.Post( () => AppendLog("Märgistaja avamine..."));
+            _edition.UnlockVF2();
+            Thread.Sleep(5000);
             Dispatcher.UIThread.Post( () => AppendLog("Verifile räsi genereerimine..."));
             _edition.Reverificate();
             Dispatcher.UIThread.Post( () => AppendLog("Väljaande info salvestamine koos räsiga..."));
             _edition.SaveEditionInfo();
             Thread.Sleep(1000);
-            Dispatcher.UIThread.Post( () => AppendLog("Märgistaja käivitamine..."));
-            _edition.StartSign();
-            Thread.Sleep(5000);
             Dispatcher.UIThread.Post( () => AppendLog("Märgistaja sulgemine..."));
             File.WriteAllText(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/.mas/vf2.done", "");
             Thread.Sleep(5000);
-            Dispatcher.UIThread.Post( () => AppendLog("Märgistaja kustutamine..."));
-            File.Delete(Path.GetTempPath() + "/signer.jar");
             Dispatcher.UIThread.Post( () => AppendLog("Info värskendamine..."));
             UpdateStatusLabelText();
             Dispatcher.UIThread.Post( () => AppendLog("Õnnestus!"));

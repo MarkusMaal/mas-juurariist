@@ -52,7 +52,7 @@ public class Edition
     /// <summary>
     /// List of optional features, stored in edition.txt with dashes (-) used as separators
     /// </summary>
-    public List<string> Features { get; set; }
+    public List<string>? Features { get; set; }
     
     /// <summary>
     /// Insecure PIN code for this computer, for legacy compatibility
@@ -77,7 +77,7 @@ public class Edition
     /// <summary>
     /// Root directory for Markus' stuff deployment
     /// </summary>
-    public required string MasRoot { get; set; }
+    public string MasRoot => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/.mas";
     
     /// <summary>
     /// Hardware information object
@@ -96,6 +96,13 @@ public class Edition
     public Edition(string textFile)
     {
         string[] lines;
+        if (RuntimeInformation.ProcessArchitecture == Architecture.X86 || RuntimeInformation.ProcessArchitecture == Architecture.X64)
+        {
+            hwinfo = MachineInformationGatherer.GatherInformation();
+        }
+
+        Unsupported = hwinfo == null;
+        if (!File.Exists(textFile)) return;
         using (var readText = new StreamReader(textFile))
         {
             lines = readText.ReadToEnd().Split('\n');
@@ -118,12 +125,6 @@ public class Edition
         Pin = lines[9];
         Name = lines[10];
         Hash = lines[11];
-        if (RuntimeInformation.ProcessArchitecture == Architecture.X86 || RuntimeInformation.ProcessArchitecture == Architecture.X64)
-        {
-            hwinfo = MachineInformationGatherer.GatherInformation();
-        }
-
-        Unsupported = hwinfo == null;
     }
 
     public Edition()
@@ -138,7 +139,6 @@ public class Edition
         Pin = new Random().Next(0, 9999).ToString().PadLeft(4, '0');
         Name = "Nimetu";
         Hash = "";
-        MasRoot = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/.mas";
         if (RuntimeInformation.ProcessArchitecture == Architecture.X86 || RuntimeInformation.ProcessArchitecture == Architecture.X64)
         {
             hwinfo = MachineInformationGatherer.GatherInformation();
@@ -386,7 +386,7 @@ public class Edition
             StartInfo = new ProcessStartInfo
             {
                 FileName = FindJava(),
-                Arguments = " -jar \"" + (Path.GetTempPath() + "verifile2.jar").Replace("\\", "/") + "\"",
+                Arguments = " --enable-native-access=ALL-UNNAMED -jar \"" + (Path.GetTempPath() + "verifile2.jar").Replace("\\", "/") + "\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 CreateNoWindow = true,
@@ -396,6 +396,31 @@ public class Edition
         p.Start();
         string line = p.StandardOutput.ReadToEnd() ?? "";
         return line.Split('\n')[0];
+    }
+
+    /// <summary>
+    /// Creates a dummy certificate (a feature of Verifile v2.1r2+)
+    /// </summary>
+    /// <param name="secCode"></param>
+    /// <returns></returns>
+    public string GenerateDummyCertificate(string secCode)
+    {
+        BuildJavaFinder();
+        Process p = new()
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = FindJava(),
+                Arguments = " --enable-native-access=ALL-UNNAMED -jar \"" + (Path.GetTempPath() + "verifile2.jar").Replace("\\", "/") + "\" -d " + secCode,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            }
+        };
+        p.Start();
+        string lines = p.StandardOutput.ReadToEnd() ?? "";
+        return lines;
     }
     
     /// <summary>
@@ -423,7 +448,7 @@ public class Edition
         sb.AppendLine("Testitud: " + (Tested ? "Jah" : "Ei"));
         sb.AppendLine($"Kasutajanimi: {Username}");
         sb.AppendLine($"Kerneli versioon: {WinVer}");
-        sb.AppendLine("Funktsioonid: " + string.Join("-", Features.ToArray()));
+        sb.AppendLine("Funktsioonid: " + (Features != null ? string.Join("-", Features.ToArray()) : ""));
         sb.AppendLine($"Ebaturvaline PIN kood: {Pin}");
         sb.AppendLine($"Nimi: {Name}");
         return sb.ToString();
@@ -482,7 +507,7 @@ public class Edition
             }
 
         }
-        if (Features.Contains("RD"))
+        if (Features?.Contains("RD") ?? false)
         {
             result += TestFiles("Kaugtöölaua testid", rd_tests);
         }
@@ -571,45 +596,5 @@ public class Edition
         using var cryptoStream = new CryptoStream(fileStream, decryptor, CryptoStreamMode.Write);
         using var outputFileStream = new FileStream(inputFile, FileMode.Open);
         outputFileStream.CopyTo(cryptoStream);
-    }
-
-    public bool DecryptSecdata(string key)
-    {
-        File.WriteAllBytes(Path.GetTempPath() + "/secdata.enc", Properties.Resources.secdata_enc);
-        try
-        {
-            DecryptFile(Path.GetTempPath() + "/secdata.enc", Path.GetTempPath() + "/signer.jar",
-                Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(key));
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($@"ERROR: {e.Message}");
-            return false;
-        }
-
-        File.Delete(Path.GetTempPath() + "/secdata.enc");
-        using var sr = new StreamReader(Path.GetTempPath() + "/signer.jar");
-        var buff = new char[2];
-        var data = sr.ReadBlock(buff);
-        sr.Close();
-        return buff[0] == 0x50 && buff[1] == 0x4B; // PK header present or not. If it is, then decryption is successful.
-    }
-
-    public void StartSign()
-    {
-        BuildJavaFinder();
-        var p = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = FindJava(),
-                Arguments = "-jar " + Path.GetTempPath() + "signer.jar -w",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-            }
-        };
-        p.Start();
     }
 }

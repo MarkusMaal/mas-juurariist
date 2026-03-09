@@ -60,11 +60,13 @@ public partial class EditionEditInfoForm : Window
         if (mas_root == "") return;
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         string s;
+        if (!File.Exists(mas_root + "/edition.txt")) return;
         using (var sr = new StreamReader(mas_root + "/edition.txt", Encoding.GetEncoding(1252)))
         {
             s = sr.ReadToEnd();
             sr.Close();
         }
+
         var attribs = s.Split('\n');
         edition = attribs[1];
         version = attribs[2];
@@ -203,5 +205,15 @@ public partial class EditionEditInfoForm : Window
     private void BuildBox_OnTextChanged(object? sender, TextChangedEventArgs e)
     {
         build = BuildBox.Text!;
+    }
+
+    private void VersionBox_OnTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        version = VersionBox.Text!;
+    }
+
+    private void NameBox_OnTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        name = NameBox.Text!;
     }
 }
